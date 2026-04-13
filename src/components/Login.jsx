@@ -4,22 +4,38 @@ import { Eye, EyeOff, LogIn, Lock } from 'lucide-react'
 export default function Login({ settings, onLogin }) {
   const [pw, setPw] = useState('')
   const [show, setShow] = useState(false)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
   const [shake, setShake] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const clubName = settings?.clubName || 'Pickleball CLB'
   const logoEmoji = settings?.logoEmoji || '🏓'
   const logoUrl = settings?.logoUrl || ''
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (pw === (settings?.password || 'admin')) {
-      onLogin()
-    } else {
-      setError(true)
-      setShake(true)
-      setTimeout(() => setShake(false), 500)
-      setPw('')
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        setError(body.error || 'Mật khẩu không đúng')
+        setShake(true)
+        setTimeout(() => setShake(false), 500)
+        setPw('')
+      } else {
+        sessionStorage.setItem('pb_token', body.token)
+        onLogin()
+      }
+    } catch {
+      setError('Không kết nối được server')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -49,7 +65,7 @@ export default function Login({ settings, onLogin }) {
                 className={`w-full pl-9 pr-10 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-colors ${error ? 'border-red-300 focus:ring-red-300' : 'border-gray-200 focus:ring-green-400'}`}
                 placeholder="Nhập mật khẩu..."
                 value={pw}
-                onChange={e => { setPw(e.target.value); setError(false) }}
+                onChange={e => { setPw(e.target.value); setError('') }}
                 autoFocus
               />
               <button type="button" onClick={() => setShow(!show)}
@@ -58,15 +74,13 @@ export default function Login({ settings, onLogin }) {
               </button>
             </div>
             {error && (
-              <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
-                Mật khẩu không đúng. Thử lại.
-              </p>
+              <p className="text-xs text-red-500 mt-1.5">{error}</p>
             )}
           </div>
 
-          <button type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-md">
-            <LogIn size={16} /> Đăng nhập
+          <button type="submit" disabled={loading}
+            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-md">
+            <LogIn size={16} /> {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
           </button>
         </form>
 

@@ -29,16 +29,26 @@ export default function Settings({ settings, onChange }) {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     setPwError('')
     setPwSuccess(false)
-    if (currentPw !== settings.password) { setPwError('Mật khẩu hiện tại không đúng'); return }
     if (!newPw || newPw.length < 4) { setPwError('Mật khẩu mới tối thiểu 4 ký tự'); return }
     if (newPw !== confirmPw) { setPwError('Mật khẩu xác nhận không khớp'); return }
-    onChange({ ...settings, ...form, password: newPw })
-    setCurrentPw(''); setNewPw(''); setConfirmPw('')
-    setPwSuccess(true)
-    setTimeout(() => setPwSuccess(false), 2500)
+    try {
+      const token = sessionStorage.getItem('pb_token')
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      })
+      const body = await res.json()
+      if (!res.ok) { setPwError(body.error || 'Lỗi đổi mật khẩu'); return }
+      setCurrentPw(''); setNewPw(''); setConfirmPw('')
+      setPwSuccess(true)
+      setTimeout(() => setPwSuccess(false), 2500)
+    } catch {
+      setPwError('Không kết nối được server')
+    }
   }
 
   return (

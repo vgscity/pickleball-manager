@@ -27,7 +27,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [mode, setMode] = useState(() => localStorage.getItem('pb_view_mode') || 'admin')
   // Auth: session-only (clears on tab close)
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem('pb_authed') === '1')
+  const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('pb_token'))
 
   // Apply web title dynamically
   useEffect(() => {
@@ -35,12 +35,11 @@ export default function App() {
   }, [settings.webTitle, settings.clubName])
 
   const handleLogin = () => {
-    sessionStorage.setItem('pb_authed', '1')
     setAuthed(true)
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('pb_authed')
+    sessionStorage.removeItem('pb_token')
     setAuthed(false)
     setMenuOpen(false)
   }

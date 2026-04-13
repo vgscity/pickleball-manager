@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { genId } from './utils'
-
-const STORAGE_KEY = 'pickleball_manager_data'
 
 const DEFAULT_PLAYERS = [
   { name: 'Alex', level: 'A' },
@@ -42,32 +40,66 @@ const defaultData = {
     logoEmoji: '🏓',
     logoUrl: '',
     webTitle: 'Pickleball CLB Manager',
-    password: 'admin',
   },
 }
 
+// Debounce helper
+function useDebouncedCallback(fn, delay) {
+  const timer = useRef(null)
+  return (...args) => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => fn(...args), delay)
+  }
+}
+
 export function useStore() {
-  const [data, setData] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (!saved) return defaultData
-      const parsed = JSON.parse(saved)
-      // If no players saved yet, load defaults
-      if (!parsed.players || parsed.players.length === 0) {
-        return { ...defaultData, ...parsed, players: DEFAULT_PLAYERS }
-      }
-      return { ...defaultData, ...parsed }
-    } catch {
-      return defaultData
-    }
-  })
+  const [data, setData] = useState(defaultData)
+  const [loading, setLoading] = useState(true)
+  const initialized = useRef(false)
 
+  // Load data from API on mount
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  }, [data])
+    fetch('/api/data')
+      .then(r => r.json())
+      .then(remote => {
+        if (remote) {
+          setData(prev => ({
+            ...defaultData,
+            ...remote,
+            settings: { ...defaultData.settings, ...remote.settings },
+            players: remote.players?.length ? remote.players : defaultData.players,
+          }))
+        }
+        initialized.current = true
+        setLoading(false)
+      })
+      .catch(() => {
+        initialized.current = true
+        setLoading(false)
+      })
+  }, [])
 
-  const update = (key, value) =>
-    setData(prev => ({ ...prev, [key]: value }))
+  // Save to API (debounced 1s) whenever data changes after init
+  const saveToApi = useDebouncedCallback((newData) => {
+    const token = sessionStorage.getItem('pb_token')
+    if (!token) return
+    fetch('/api/data', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(newData),
+    }).catch(console.error)
+  }, 1000)
 
-  return { data, update }
+  const update = (key, value) => {
+    setData(prev => {
+      const next = { ...prev, [key]: value }
+      if (initialized.current) saveToApi(next)
+      return next
+    })
+  }
+
+  return { data, update, loading }
 }
