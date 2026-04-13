@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { initDb } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,12 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server chạy tại http://localhost:${PORT}`);
+
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server chạy tại http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Không kết nối được database:', err);
+  process.exit(1);
 });

@@ -1,3 +1,10 @@
+databases:
+  - name: pickleball-db
+    databaseName: pickleball
+    user: pickleball
+    plan: free
+    region: singapore
+
 services:
   - type: web
     name: pickleball-manager
@@ -5,15 +12,11 @@ services:
     region: singapore
     plan: free
     buildCommand: npm install && npm run build && cd server && npm install
-    startCommand: cd server && node --experimental-sqlite start.js
+    startCommand: cd server && node index.js
     envVars:
       - key: JWT_SECRET
         generateValue: true
-      - key: DATA_DIR
-        value: /data
-      - key: NODE_VERSION
-        value: 22.11.0
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pickleball-db
+          property: connectionString
