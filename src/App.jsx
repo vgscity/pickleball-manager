@@ -25,7 +25,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [mode, setMode] = useState(() => localStorage.getItem('pb_view_mode') || 'admin')
+  const [mode, setMode] = useState(() => localStorage.getItem('pb_view_mode') || 'viewer')
   // Auth: session-only (clears on tab close)
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('pb_token'))
 
@@ -42,6 +42,7 @@ export default function App() {
     sessionStorage.removeItem('pb_token')
     setAuthed(false)
     setMenuOpen(false)
+    toggleMode('viewer')
   }
 
   const toggleMode = (m) => {
