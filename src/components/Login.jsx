@@ -84,10 +84,6 @@ export default function Login({ settings, onLogin }) {
           </button>
         </form>
 
-        <div className="mt-5 pt-4 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-400">Mật khẩu mặc định: <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">admin</code></p>
-          <p className="text-xs text-gray-400 mt-1">Đổi mật khẩu trong <strong>Cài đặt</strong> sau khi đăng nhập</p>
-        </div>
       </div>
     </div>
   )
