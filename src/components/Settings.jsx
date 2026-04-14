@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Settings2, Eye, EyeOff, Check, Upload, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Settings2, Eye, EyeOff, Check, RefreshCw, ImagePlus, X } from 'lucide-react'
 
 const EMOJIS = ['🏓', '🎾', '🏆', '⚡', '🔥', '🌟', '🎯', '💪', '🏅', '🥇']
 
@@ -13,20 +13,35 @@ export default function Settings({ settings, onChange }) {
   const [pwError, setPwError] = useState('')
   const [pwSuccess, setPwSuccess] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
 
-  useEffect(() => {
-    setForm({ ...settings })
-  }, [settings])
+  useEffect(() => { setForm({ ...settings }) }, [settings])
 
   // Live update document title
   useEffect(() => {
-    document.title = form.webTitle || 'Pickleball CLB'
-  }, [form.webTitle])
+    document.title = form.webTitle || form.clubName || 'Pickleball CLB'
+  }, [form.webTitle, form.clubName])
 
   const handleSave = () => {
     onChange({ ...form })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { alert('Vui lòng chọn file ảnh'); return }
+    if (file.size > 2 * 1024 * 1024) { alert('Ảnh tối đa 2MB'); return }
+    setUploading(true)
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setForm(f => ({ ...f, logoUrl: ev.target.result }))
+      setUploading(false)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = '' // reset input
   }
 
   const handleChangePassword = async () => {
@@ -77,39 +92,60 @@ export default function Settings({ settings, onChange }) {
           </div>
         </div>
 
+        {/* Logo upload */}
         <div>
-          <label className="text-xs text-gray-500 font-medium">Tên CLB</label>
-          <input className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-            placeholder="Pickleball CLB Hà Nội"
-            value={form.clubName}
-            onChange={e => setForm({ ...form, clubName: e.target.value })} />
-        </div>
-
-        <div>
-          <label className="text-xs text-gray-500 font-medium">Tiêu đề trình duyệt (tab title)</label>
-          <input className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-            placeholder="Pickleball CLB Manager"
-            value={form.webTitle}
-            onChange={e => setForm({ ...form, webTitle: e.target.value })} />
-        </div>
-
-        <div>
-          <label className="text-xs text-gray-500 font-medium">Logo URL (ảnh từ internet)</label>
-          <input className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-            placeholder="https://example.com/logo.png"
-            value={form.logoUrl}
-            onChange={e => setForm({ ...form, logoUrl: e.target.value })} />
-          {form.logoUrl && (
-            <button onClick={() => setForm({ ...form, logoUrl: '' })}
-              className="text-xs text-red-400 hover:text-red-600 mt-1">
-              Xóa URL, dùng emoji
+          <label className="text-xs text-gray-500 font-medium">Logo CLB</label>
+          <div className="mt-1.5 flex flex-col gap-2">
+            {/* Upload from computer */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 border-2 border-dashed border-gray-300 hover:border-green-400 rounded-xl px-4 py-3 text-sm text-gray-600 hover:text-green-700 transition-colors w-full justify-center"
+            >
+              <ImagePlus size={16} />
+              {uploading ? 'Đang xử lý...' : 'Upload ảnh từ máy tính'}
+              <span className="text-xs text-gray-400">(JPG, PNG, max 2MB)</span>
             </button>
-          )}
+
+            {/* URL input */}
+            <div className="relative">
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 pr-8"
+                placeholder="Hoặc nhập URL ảnh từ internet..."
+                value={form.logoUrl?.startsWith('data:') ? '' : (form.logoUrl || '')}
+                onChange={e => setForm({ ...form, logoUrl: e.target.value })}
+              />
+              {form.logoUrl && (
+                <button onClick={() => setForm({ ...form, logoUrl: '' })}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {form.logoUrl && (
+              <p className="text-xs text-green-600">
+                ✓ Đang dùng ảnh logo {form.logoUrl.startsWith('data:') ? '(từ máy tính)' : '(từ URL)'}
+                {' — '}
+                <button onClick={() => setForm({ ...form, logoUrl: '' })} className="underline text-red-400">
+                  Xóa, dùng emoji
+                </button>
+              </p>
+            )}
+          </div>
         </div>
 
+        {/* Emoji fallback */}
         {!form.logoUrl && (
           <div>
-            <label className="text-xs text-gray-500 font-medium">Emoji logo</label>
+            <label className="text-xs text-gray-500 font-medium">Emoji logo (nếu không dùng ảnh)</label>
             <div className="flex flex-wrap gap-2 mt-1.5">
               {EMOJIS.map(em => (
                 <button key={em}
@@ -128,6 +164,22 @@ export default function Settings({ settings, onChange }) {
             </div>
           </div>
         )}
+
+        <div>
+          <label className="text-xs text-gray-500 font-medium">Tên CLB</label>
+          <input className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+            placeholder="Pickleball CLB Hà Nội"
+            value={form.clubName}
+            onChange={e => setForm({ ...form, clubName: e.target.value })} />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 font-medium">Tiêu đề trình duyệt (tab title)</label>
+          <input className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+            placeholder="Pickleball CLB Manager"
+            value={form.webTitle}
+            onChange={e => setForm({ ...form, webTitle: e.target.value })} />
+        </div>
 
         <button onClick={handleSave}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${saved ? 'bg-green-100 text-green-700' : 'bg-green-600 hover:bg-green-700 text-white'}`}>

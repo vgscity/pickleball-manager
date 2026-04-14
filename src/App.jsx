@@ -34,6 +34,34 @@ export default function App() {
     document.title = settings.webTitle || settings.clubName || 'Pickleball CLB'
   }, [settings.webTitle, settings.clubName])
 
+  // Update favicon dynamically
+  useEffect(() => {
+    const setFavicon = (href) => {
+      let link = document.querySelector("link[rel~='icon']")
+      if (!link) {
+        link = document.createElement('link')
+        link.rel = 'icon'
+        document.head.appendChild(link)
+      }
+      link.href = href
+    }
+
+    if (settings.logoUrl) {
+      setFavicon(settings.logoUrl)
+    } else {
+      // Draw emoji onto canvas and use as favicon
+      const emoji = settings.logoEmoji || '🏓'
+      const canvas = document.createElement('canvas')
+      canvas.width = 64; canvas.height = 64
+      const ctx = canvas.getContext('2d')
+      ctx.font = '52px serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(emoji, 32, 36)
+      setFavicon(canvas.toDataURL())
+    }
+  }, [settings.logoUrl, settings.logoEmoji])
+
   const handleLogin = () => {
     setAuthed(true)
   }
