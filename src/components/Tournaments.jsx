@@ -44,6 +44,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
     pairingRule: 'random',
     hasKnockout: false,
     knockoutSize: 8,
+    hasThirdPlace: false,
     startDate: '',
     endDate: '',
     courts: 2,
@@ -54,7 +55,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
     if (!form.name.trim()) return
     const t = { id: genId(), ...form, createdAt: new Date().toISOString(), status: 'setup', participants: [] }
     onTournamentsChange([...tournaments, t])
-    setForm({ name: '', type: 'singles', format: 'roundrobin', groups: 1, pairingRule: 'random', hasKnockout: false, knockoutSize: 8, startDate: '', endDate: '', courts: 2, description: '' })
+    setForm({ name: '', type: 'singles', format: 'roundrobin', groups: 1, pairingRule: 'random', hasKnockout: false, knockoutSize: 8, hasThirdPlace: false, startDate: '', endDate: '', courts: 2, description: '' })
     setShowForm(false)
   }
 
@@ -213,6 +214,27 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
     setKnockoutSetup(null)
   }
 
+  const handleGenerateThirdPlace = (t) => {
+    const isKnockoutStage = t.format === 'roundrobin' && t.hasKnockout
+    const stage = isKnockoutStage ? 'knockout' : 'group'
+    const totalRounds = isKnockoutStage ? (t.knockoutRounds || 3) : (t.rounds || 3)
+    const semiFinalRound = totalRounds - 1
+
+    const stageMatches = matches.filter(m => m.tournamentId === t.id && m.stage === stage)
+    const semis = stageMatches.filter(m => m.round === semiFinalRound && m.status === 'done')
+
+    if (semis.length < 2) { alert('Cần hoàn thành 2 trận bán kết trước'); return }
+
+    const losers = semis.map(m => m.winner === m.player1.id ? m.player2 : m.player1)
+    onMatchesChange([...matches, {
+      id: genId(), tournamentId: t.id, stage: 'thirdplace',
+      group: null, round: totalRounds, matchNum: 1,
+      player1: losers[0], player2: losers[1],
+      score1: '', score2: '', winner: null,
+      scheduledTime: null, court: null, status: 'pending',
+    }])
+  }
+
   const handleUpdateScore = (matchId, field, value) => {
     onMatchesChange(matches.map(m => {
       if (m.id !== matchId) return m
@@ -275,10 +297,21 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
             <div>
               <label className="text-xs text-gray-500 font-medium">Thể thức</label>
               <select className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                value={form.format} onChange={e => setForm({ ...form, format: e.target.value, groups: 1, hasKnockout: false })}>
+                value={form.format} onChange={e => setForm({ ...form, format: e.target.value, groups: 1, hasKnockout: false, hasThirdPlace: false })}>
                 <option value="roundrobin">Vòng tròn (Round Robin)</option>
                 <option value="elimination">Loại trực tiếp (Elimination)</option>
               </select>
+              {form.format === 'elimination' && (
+                <label className="flex items-center gap-2 cursor-pointer select-none p-2.5 mt-2 rounded-xl border border-gray-200 hover:border-yellow-300 transition-colors">
+                  <input type="checkbox" className="w-4 h-4 accent-yellow-500"
+                    checked={form.hasThirdPlace}
+                    onChange={e => setForm({ ...form, hasThirdPlace: e.target.checked })} />
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">🥉 Có trận tranh hạng 3</div>
+                    <div className="text-xs text-gray-500">Hai người thua bán kết đấu với nhau</div>
+                  </div>
+                </label>
+              )}
             </div>
             {form.format === 'roundrobin' && (<>
               <div>
@@ -303,7 +336,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                   </div>
                 </label>
               </div>
-              {form.hasKnockout && (
+              {form.hasKnockout && (<>
                 <div>
                   <label className="text-xs text-gray-500 font-medium">Số người vào vòng loại trực tiếp</label>
                   <select className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -313,7 +346,18 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                     <option value={16}>16 người (Vòng 1/8 → ... → Chung kết)</option>
                   </select>
                 </div>
-              )}
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none p-3 rounded-xl border border-gray-200 hover:border-yellow-300 transition-colors">
+                    <input type="checkbox" className="w-4 h-4 accent-yellow-500"
+                      checked={form.hasThirdPlace}
+                      onChange={e => setForm({ ...form, hasThirdPlace: e.target.checked })} />
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">🥉 Có trận tranh hạng 3</div>
+                      <div className="text-xs text-gray-500">Hai người thua bán kết đấu với nhau</div>
+                    </div>
+                  </label>
+                </div>
+              </>)}
             </>)}
             <div className="sm:col-span-2">
               <label className="text-xs text-gray-500 font-medium">Luật ghép cặp theo trình độ</label>
@@ -380,6 +424,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
             const tMatches = matches.filter(m => m.tournamentId === t.id)
             const groupMatches = tMatches.filter(m => m.stage === 'group' || !m.stage)
             const knockoutMatches = tMatches.filter(m => m.stage === 'knockout')
+            const thirdPlaceMatches = tMatches.filter(m => m.stage === 'thirdplace')
             const doneCount = tMatches.filter(m => m.status === 'done').length
             const isExpanded = expanded === t.id
             const numGroups = t.numGroups || 1
@@ -636,6 +681,39 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                         </div>
                       </div>
                     )}
+
+                    {/* Third place match */}
+                    {t.hasThirdPlace && (() => {
+                      const isKnockoutStage = t.format === 'roundrobin' && t.hasKnockout
+                      const stage = isKnockoutStage ? 'knockout' : 'group'
+                      const totalRounds = isKnockoutStage ? (t.knockoutRounds || 3) : (t.rounds || 3)
+                      const semiFinalRound = totalRounds - 1
+                      const stageMatches = tMatches.filter(m => m.stage === stage)
+                      const semis = stageMatches.filter(m => m.round === semiFinalRound)
+                      const semisAllDone = semis.length >= 2 && semis.every(m => m.status === 'done')
+                      return (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                            <h4 className="font-semibold text-sm text-amber-800 flex items-center gap-1.5">
+                              🥉 Trận tranh hạng 3
+                            </h4>
+                            {thirdPlaceMatches.length === 0 && (
+                              <button onClick={() => handleGenerateThirdPlace(t)}
+                                disabled={!semisAllDone}
+                                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                                {semisAllDone ? 'Tạo trận hạng 3' : 'Chờ bán kết xong'}
+                              </button>
+                            )}
+                          </div>
+                          {thirdPlaceMatches.length > 0
+                            ? <div className="space-y-1.5">
+                                {thirdPlaceMatches.map(m => <MatchRow key={m.id} match={m} onUpdate={handleUpdateScore} highlight />)}
+                              </div>
+                            : <p className="text-xs text-amber-600">Trận sẽ được tạo sau khi 2 trận bán kết hoàn thành.</p>
+                          }
+                        </div>
+                      )
+                    })()}
 
                     <div className="flex gap-2 pt-2 border-t border-gray-100">
                       <button onClick={() => { if(confirm('Kết thúc giải đấu này?')) onTournamentsChange(tournaments.map(x => x.id === t.id ? { ...x, status: 'finished' } : x)) }}
