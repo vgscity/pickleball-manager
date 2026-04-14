@@ -40,8 +40,8 @@ export default function Login({ settings, onLogin }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-900 via-gray-900 to-gray-900 flex items-center justify-center p-4">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 ${shake ? 'animate-pulse' : ''}`}>
+    <div className="min-h-screen bg-gradient-to-br from-green-900 via-gray-900 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 my-4 ${shake ? 'animate-pulse' : ''}`}>
         {/* Logo */}
         <div className="flex flex-col items-center mb-7">
           {logoUrl ? (
