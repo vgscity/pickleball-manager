@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Trophy, Plus, ChevronDown, ChevronUp, Shuffle, Check, X, Users, LayoutGrid, Swords, Crown } from 'lucide-react'
-import { genId, generateRoundRobin, generateSingleElimination, generateDoubles, generateGroupStageRoundRobin } from '../utils'
+import { Trophy, Plus, ChevronDown, ChevronUp, Shuffle, Check, X, Users, LayoutGrid, Swords, Crown, GitBranch } from 'lucide-react'
+import { genId, generateRoundRobin, generateSingleElimination, generateDoubleElimination, generateDoubles, generateGroupStageRoundRobin } from '../utils'
 
 // Compute standings for a set of matches
 function computeStandings(matchList) {
@@ -114,6 +114,16 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
       onMatchesChange([...matches.filter(m => m.tournamentId !== t.id), ...newMatches])
       onTournamentsChange(tournaments.map(x =>
         x.id === t.id ? { ...x, status: 'active', rounds: totalRounds, numGroups } : x
+      ))
+    } else if (t.format === 'double_elimination') {
+      let entities = t.type === 'doubles' ? generateDoubles(participantPlayers, pairingRule) : participantPlayers
+      const deMatches = generateDoubleElimination(entities).map(m => ({
+        ...m, tournamentId: t.id, scheduledTime: null, court: null,
+      }))
+      const wbRounds = deMatches.filter(m => m.stage === 'winners').reduce((max, m) => Math.max(max, m.round), 0)
+      onMatchesChange([...matches.filter(m => m.tournamentId !== t.id), ...deMatches])
+      onTournamentsChange(tournaments.map(x =>
+        x.id === t.id ? { ...x, status: 'active', deWbRounds: wbRounds, numGroups: 1 } : x
       ))
     } else {
       let entities = t.type === 'doubles' ? generateDoubles(participantPlayers, pairingRule) : participantPlayers
@@ -236,17 +246,46 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
   }
 
   const handleUpdateScore = (matchId, field, value) => {
-    onMatchesChange(matches.map(m => {
+    let updatedMatch = null
+    let newMatches = matches.map(m => {
       if (m.id !== matchId) return m
       const updated = { ...m, [field]: value }
       if (updated.score1 !== '' && updated.score2 !== '') {
         const s1 = parseInt(updated.score1) || 0
         const s2 = parseInt(updated.score2) || 0
-        updated.winner = s1 > s2 ? updated.player1.id : s2 > s1 ? updated.player2.id : null
+        updated.winner = s1 > s2 ? updated.player1?.id : s2 > s1 ? updated.player2?.id : null
         updated.status = 'done'
       }
+      updatedMatch = updated
       return updated
-    }))
+    })
+
+    // Auto-route winners/losers for Double Elimination
+    if (updatedMatch?.winner && updatedMatch?.winnerNextId !== undefined) {
+      const p1 = updatedMatch.player1
+      const p2 = updatedMatch.player2
+      const winner = updatedMatch.winner === p1?.id ? p1 : p2
+      const loser = updatedMatch.winner === p1?.id ? p2 : p1
+
+      if (updatedMatch.winnerNextId && winner) {
+        newMatches = newMatches.map(m => m.id !== updatedMatch.winnerNextId ? m
+          : { ...m, [`player${updatedMatch.winnerNextSlot}`]: winner })
+      }
+      if (updatedMatch.loserNextId && loser) {
+        newMatches = newMatches.map(m => m.id !== updatedMatch.loserNextId ? m
+          : { ...m, [`player${updatedMatch.loserNextSlot}`]: loser })
+      }
+
+      // Grand Final: if LB finalist (player2) wins → activate GF Reset
+      if (updatedMatch.stage === 'grand_final' && updatedMatch.winner === p2?.id) {
+        newMatches = newMatches.map(m => {
+          if (m.stage !== 'grand_final_reset' || m.tournamentId !== updatedMatch.tournamentId) return m
+          return { ...m, player1: p1, player2: p2, status: 'pending', winner: null, score1: '', score2: '' }
+        })
+      }
+    }
+
+    onMatchesChange(newMatches)
   }
 
   const statusBadge = { setup: 'bg-gray-100 text-gray-600', active: 'bg-blue-100 text-blue-700', finished: 'bg-green-100 text-green-700' }
@@ -299,7 +338,8 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
               <select className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                 value={form.format} onChange={e => setForm({ ...form, format: e.target.value, groups: 1, hasKnockout: false, hasThirdPlace: false })}>
                 <option value="roundrobin">Vòng tròn (Round Robin)</option>
-                <option value="elimination">Loại trực tiếp (Elimination)</option>
+                <option value="elimination">Loại trực tiếp đơn (Single Elimination)</option>
+                <option value="double_elimination">Loại trực tiếp kép (Double Elimination)</option>
               </select>
               {form.format === 'elimination' && (
                 <label className="flex items-center gap-2 cursor-pointer select-none p-2.5 mt-2 rounded-xl border border-gray-200 hover:border-yellow-300 transition-colors">
@@ -425,6 +465,10 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
             const groupMatches = tMatches.filter(m => m.stage === 'group' || !m.stage)
             const knockoutMatches = tMatches.filter(m => m.stage === 'knockout')
             const thirdPlaceMatches = tMatches.filter(m => m.stage === 'thirdplace')
+            const deWbMatches = tMatches.filter(m => m.stage === 'winners')
+            const deLbMatches = tMatches.filter(m => m.stage === 'losers')
+            const deGfMatches = tMatches.filter(m => m.stage === 'grand_final' || m.stage === 'grand_final_reset')
+            const isDE = t.format === 'double_elimination'
             const doneCount = tMatches.filter(m => m.status === 'done').length
             const isExpanded = expanded === t.id
             const numGroups = t.numGroups || 1
@@ -448,7 +492,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-800 truncate">{t.name}</div>
                     <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-2">
-                      <span>{t.type === 'singles' ? 'Đơn' : 'Đôi'} · {t.format === 'roundrobin' ? 'Vòng tròn' : 'Loại trực tiếp'}</span>
+                      <span>{t.type === 'singles' ? 'Đơn' : 'Đôi'} · {t.format === 'roundrobin' ? 'Vòng tròn' : t.format === 'double_elimination' ? 'Double Elimination' : 'Single Elimination'}</span>
                       {numGroups > 1 && <span className="text-yellow-600 font-medium">{numGroups} bảng</span>}
                       {t.hasKnockout && <span className="text-orange-600">+ Loại trực tiếp</span>}
                       {t.pairingRule === 'mixed' && <span className="text-purple-600">⚖️ Trộn A+B</span>}
@@ -496,8 +540,93 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                       </div>
                     </div>
 
+                    {/* Double Elimination brackets */}
+                    {isDE && deWbMatches.length > 0 && (() => {
+                      const wbRoundNums = [...new Set(deWbMatches.map(m => m.round))].sort((a,b)=>a-b)
+                      const lbRoundNums = [...new Set(deLbMatches.map(m => m.round))].sort((a,b)=>a-b)
+                      const totalWbRounds = wbRoundNums.length
+                      const getWbRoundName = (r) => {
+                        const fromEnd = totalWbRounds - r
+                        if (fromEnd === 0) return 'Chung kết Nhánh Thắng'
+                        if (fromEnd === 1) return 'Bán kết'
+                        if (fromEnd === 2) return 'Tứ kết'
+                        return `Vòng 1/${Math.pow(2, fromEnd)}`
+                      }
+                      const gfMatch = deGfMatches.find(m => m.stage === 'grand_final')
+                      const gfrMatch = deGfMatches.find(m => m.stage === 'grand_final_reset')
+                      const gfrActive = gfrMatch?.player1 && gfrMatch?.player2
+                      return (
+                        <div className="space-y-3">
+                          {/* Winners Bracket */}
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                            <h4 className="font-bold text-sm text-yellow-800 mb-3 flex items-center gap-1.5">
+                              <Crown size={14}/> Nhánh Thắng (Winners Bracket)
+                            </h4>
+                            <div className="space-y-3">
+                              {wbRoundNums.map(rn => (
+                                <div key={rn}>
+                                  <div className="text-xs font-bold text-yellow-700 mb-1.5 uppercase tracking-wide">{getWbRoundName(rn)}</div>
+                                  <div className="space-y-1.5">
+                                    {deWbMatches.filter(m=>m.round===rn).map(m=><DEMatchRow key={m.id} match={m} onUpdate={handleUpdateScore}/>)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Losers Bracket */}
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                            <h4 className="font-bold text-sm text-blue-800 mb-3 flex items-center gap-1.5">
+                              <GitBranch size={14}/> Nhánh Thua (Losers Bracket)
+                            </h4>
+                            <div className="space-y-3">
+                              {lbRoundNums.map(rn => (
+                                <div key={rn}>
+                                  <div className="text-xs font-bold text-blue-700 mb-1.5 uppercase tracking-wide">
+                                    {rn === lbRoundNums[lbRoundNums.length-1] ? 'Chung kết Nhánh Thua' : `Nhánh thua - Vòng ${rn}`}
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {deLbMatches.filter(m=>m.round===rn).map(m=><DEMatchRow key={m.id} match={m} onUpdate={handleUpdateScore}/>)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Grand Final */}
+                          {gfMatch && (
+                            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 rounded-xl p-3">
+                              <h4 className="font-bold text-sm text-orange-800 mb-3 flex items-center gap-1.5">
+                                🏆 Chung kết (Grand Final)
+                                <span className="text-xs font-normal text-orange-600 ml-1">Nhánh thua cần thắng 2 trận liên tiếp</span>
+                              </h4>
+                              <DEMatchRow match={gfMatch} onUpdate={handleUpdateScore} isGF/>
+                              {gfrActive && (
+                                <div className="mt-3">
+                                  <div className="text-xs font-bold text-red-700 mb-1.5">🔄 Grand Final Reset (nhánh thua vừa thắng)</div>
+                                  <DEMatchRow match={gfrMatch} onUpdate={handleUpdateScore} isGF/>
+                                </div>
+                              )}
+                              {gfMatch.winner && !gfrActive && (
+                                <div className="mt-2 text-center">
+                                  <span className="text-sm font-black text-yellow-700">
+                                    🥇 Vô địch: {[gfMatch.player1, gfMatch.player2].find(p=>p?.id===gfMatch.winner)?.name}
+                                  </span>
+                                </div>
+                              )}
+                              {gfrMatch?.winner && (
+                                <div className="mt-2 text-center">
+                                  <span className="text-sm font-black text-yellow-700">
+                                    🥇 Vô địch: {[gfrMatch.player1, gfrMatch.player2].find(p=>p?.id===gfrMatch.winner)?.name}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+
                     {/* Group stage matches */}
-                    {groupMatches.length > 0 && (
+                    {!isDE && groupMatches.length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium text-sm text-gray-700">
@@ -559,7 +688,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                     )}
 
                     {/* Knockout stage trigger */}
-                    {t.hasKnockout && groupMatches.length > 0 && !hasKnockoutMatches && (
+                    {!isDE && t.hasKnockout && groupMatches.length > 0 && !hasKnockoutMatches && (
                       <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div>
@@ -654,7 +783,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                     )}
 
                     {/* Knockout stage matches */}
-                    {hasKnockoutMatches && (
+                    {!isDE && hasKnockoutMatches && (
                       <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-semibold text-sm text-orange-800 flex items-center gap-1.5">
@@ -683,7 +812,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
                     )}
 
                     {/* Third place match */}
-                    {t.hasThirdPlace && (() => {
+                    {!isDE && t.hasThirdPlace && (() => {
                       const isKnockoutStage = t.format === 'roundrobin' && t.hasKnockout
                       const stage = isKnockoutStage ? 'knockout' : 'group'
                       const totalRounds = isKnockoutStage ? (t.knockoutRounds || 3) : (t.rounds || 3)
@@ -775,6 +904,42 @@ function MatchRow({ match, onUpdate, highlight }) {
         {winnerIsP2 && '🏆 '}{match.player2.name}
       </span>
       {match.court && <span className="text-xs text-gray-400 shrink-0">S{match.court}</span>}
+    </div>
+  )
+}
+
+// Match row for Double Elimination — shows TBD for unfilled slots
+function DEMatchRow({ match, onUpdate, isGF }) {
+  const p1 = match.player1
+  const p2 = match.player2
+  const canInput = p1 && p2 && match.status !== 'done'
+  const isDone = match.status === 'done'
+  const winnerIsP1 = isDone && match.winner === p1?.id
+  const winnerIsP2 = isDone && match.winner === p2?.id
+
+  const playerName = (p, isWinner) => (
+    <span className={`flex-1 truncate text-xs font-medium ${isWinner ? 'text-yellow-700 font-bold' : p ? 'text-gray-800' : 'text-gray-400 italic'}`}>
+      {isWinner && '🏆 '}{p ? p.name : 'TBD'}
+    </span>
+  )
+
+  return (
+    <div className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-colors ${isDone ? 'bg-white border-gray-200' : isGF ? 'bg-white border-yellow-300 shadow-sm' : 'bg-white border-gray-200'}`}>
+      {playerName(p1, winnerIsP1)}
+      <div className="flex items-center gap-1 shrink-0">
+        {canInput || isDone ? (<>
+          <input type="number" min="0" disabled={isDone}
+            className="w-10 border border-gray-200 rounded px-1.5 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-yellow-400 bg-white disabled:bg-gray-50"
+            value={match.score1} onChange={e => onUpdate(match.id, 'score1', e.target.value)} placeholder="0" />
+          <span className="text-gray-400 font-bold text-xs">:</span>
+          <input type="number" min="0" disabled={isDone}
+            className="w-10 border border-gray-200 rounded px-1.5 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-yellow-400 bg-white disabled:bg-gray-50"
+            value={match.score2} onChange={e => onUpdate(match.id, 'score2', e.target.value)} placeholder="0" />
+        </>) : (
+          <span className="text-xs text-gray-300 px-2">vs</span>
+        )}
+      </div>
+      {playerName(p2, winnerIsP2)}
     </div>
   )
 }
