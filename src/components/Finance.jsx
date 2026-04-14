@@ -193,30 +193,50 @@ export default function Finance({ transactions, tournaments, onTransactionsChang
           <p>Chưa có giao dịch nào</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(tx => {
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="grid grid-cols-[36px_80px_1fr_120px_120px_36px] gap-x-3 px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <div></div>
+            <div>Ngày</div>
+            <div>Mô tả / Danh mục</div>
+            <div>Giải đấu</div>
+            <div className="text-right">Số tiền</div>
+            <div></div>
+          </div>
+          {/* Rows */}
+          {filtered.map((tx, i) => {
             const isIn = tx.type === 'income'
             const tName = tx.tournamentId ? tournaments.find(t => t.id === tx.tournamentId)?.name : null
             return (
-              <div key={tx.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5 flex items-center gap-3 group hover:border-purple-200 transition-colors">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isIn ? 'bg-green-100' : 'bg-red-100'}`}>
+              <div key={tx.id}
+                className={`grid grid-cols-[36px_80px_1fr_120px_120px_36px] gap-x-3 px-4 py-3 items-center group hover:bg-purple-50 transition-colors ${i !== 0 ? 'border-t border-gray-50' : ''}`}>
+                {/* Icon */}
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center ${isIn ? 'bg-green-100' : 'bg-red-100'}`}>
                   {isIn
-                    ? <ArrowUpCircle size={18} className="text-green-600" />
-                    : <ArrowDownCircle size={18} className="text-red-500" />}
+                    ? <ArrowUpCircle size={14} className="text-green-600" />
+                    : <ArrowDownCircle size={14} className="text-red-500" />}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-800 text-sm">{tx.description}</span>
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{tx.category}</span>
-                    {tName && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">{tName}</span>}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">{formatDate(tx.date)}</div>
+                {/* Ngày */}
+                <div className="text-xs text-gray-500">{formatDate(tx.date)}</div>
+                {/* Mô tả + danh mục */}
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-800 truncate">{tx.description}</div>
+                  <span className="text-xs text-gray-400">{tx.category}</span>
                 </div>
-                <div className={`text-base font-bold shrink-0 ${isIn ? 'text-green-600' : 'text-red-500'}`}>
+                {/* Giải đấu */}
+                <div className="truncate">
+                  {tName
+                    ? <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">{tName}</span>
+                    : <span className="text-xs text-gray-300">—</span>}
+                </div>
+                {/* Số tiền */}
+                <div className={`text-sm font-bold text-right ${isIn ? 'text-green-600' : 'text-red-500'}`}>
                   {isIn ? '+' : '-'}{formatCurrency(tx.amount)}
                 </div>
-                <button onClick={() => handleDelete(tx.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-lg text-red-400 transition-all">
-                  <Trash2 size={14} />
+                {/* Xóa */}
+                <button onClick={() => handleDelete(tx.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded-lg text-red-400 transition-all justify-self-center">
+                  <Trash2 size={13} />
                 </button>
               </div>
             )
