@@ -1,41 +1,27 @@
 #!/usr/bin/env node
-// Kéo dữ liệu từ Render về local server
-// Chạy: node scripts/sync-from-render.js <admin-password>
+// Kéo dữ liệu từ Render về file backup local
+// Chạy: node scripts/sync-from-render.js
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const RENDER_URL = 'https://pickleball-manager.onrender.com';
-const LOCAL_URL = 'http://localhost:3001';
+const OUTPUT = path.join(__dirname, '..', 'data-backup.json');
 
 async function main() {
-  const password = process.argv[2];
-  if (!password) {
-    console.error('Dùng: node scripts/sync-from-render.js <mật-khẩu-admin>');
-    process.exit(1);
-  }
+  console.log('Đang lấy dữ liệu từ Render...');
+  const res = await fetch(`${RENDER_URL}/api/data`);
+  if (!res.ok) throw new Error(`Lỗi: ${res.status}`);
+  const data = await res.json();
 
-  console.log('1. Lấy dữ liệu từ Render...');
-  const dataRes = await fetch(`${RENDER_URL}/api/data`);
-  if (!dataRes.ok) throw new Error(`Lỗi lấy data: ${dataRes.status}`);
-  const data = await dataRes.json();
-  console.log('   ✓ Lấy data thành công');
-
-  console.log('2. Đăng nhập local...');
-  const loginRes = await fetch(`${LOCAL_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  if (!loginRes.ok) throw new Error('Đăng nhập local thất bại — sai mật khẩu?');
-  const { token } = await loginRes.json();
-  console.log('   ✓ Đăng nhập thành công');
-
-  console.log('3. Ghi dữ liệu vào local...');
-  const putRes = await fetch(`${LOCAL_URL}/api/data`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(data),
-  });
-  if (!putRes.ok) throw new Error(`Lỗi ghi data: ${putRes.status}`);
-  console.log('   ✓ Đồng bộ hoàn tất!');
+  fs.writeFileSync(OUTPUT, JSON.stringify(data, null, 2), 'utf8');
+  console.log(`✓ Đã lưu vào: data-backup.json`);
+  console.log(`  - ${data?.players?.length ?? 0} thành viên`);
+  console.log(`  - ${data?.tournaments?.length ?? 0} giải đấu`);
+  console.log(`  - ${data?.matches?.length ?? 0} trận`);
+  console.log(`  - ${data?.transactions?.length ?? 0} giao dịch`);
 }
 
 main().catch(err => { console.error('Lỗi:', err.message); process.exit(1); });
