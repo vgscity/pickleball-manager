@@ -9,6 +9,7 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/data', require('./routes/data'));
+app.use('/api/superadmin', require('./routes/superadmin'));
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // Serve React build
@@ -21,9 +22,7 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 initDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server chạy tại http://localhost:${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`Server chạy tại http://localhost:${PORT}`));
 }).catch(err => {
   console.error('Không kết nối được database:', err);
   process.exit(1);

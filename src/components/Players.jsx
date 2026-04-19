@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { UserPlus, Trash2, Edit2, Check, X, Search, Users } from 'lucide-react'
+import { UserPlus, Trash2, Edit2, Check, X, Search, Users, Lock } from 'lucide-react'
 import { genId } from '../utils'
 
-export default function Players({ players, onChange }) {
+const FREE_MEMBER_LIMIT = 20
+
+export default function Players({ players, onChange, plan = 'free' }) {
+  const isPro = plan === 'pro'
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState({ name: '', phone: '', level: 'B', note: '' })
@@ -21,6 +24,10 @@ export default function Players({ players, onChange }) {
       onChange(players.map(p => p.id === editId ? { ...p, ...form } : p))
       setEditId(null)
     } else {
+      if (!isPro && players.length >= FREE_MEMBER_LIMIT) {
+        alert(`Gói Free tối đa ${FREE_MEMBER_LIMIT} thành viên. Nâng cấp Pro để thêm không giới hạn.`)
+        return
+      }
       onChange([...players, { id: genId(), ...form, joinedAt: new Date().toISOString() }])
     }
     setForm({ name: '', phone: '', level: 'B', note: '' })
@@ -65,6 +72,7 @@ export default function Players({ players, onChange }) {
         >
           <UserPlus size={16} />
           Thêm thành viên
+          {!isPro && <span className="text-xs opacity-75">({players.length}/{FREE_MEMBER_LIMIT})</span>}
         </button>
       </div>
 

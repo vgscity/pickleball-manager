@@ -1,6 +1,5 @@
 const bcrypt = require('bcryptjs');
 
-// Dùng PostgreSQL trên Render, SQLite local
 const USE_PG = !!process.env.DATABASE_URL;
 
 let pool, sqliteDb;
@@ -18,13 +17,11 @@ if (USE_PG) {
   console.log('Dùng SQLite local');
 }
 
-// Unified query interface
 async function query(sql, params = []) {
   if (USE_PG) {
     const result = await pool.query(sql, params);
     return result.rows;
   } else {
-    // Convert $1,$2 → ?, ? for SQLite
     const sqliteSql = sql.replace(/\$\d+/g, '?');
     if (/^\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)/i.test(sql)) {
       sqliteDb.prepare(sqliteSql).run(...params);
@@ -40,53 +37,63 @@ async function initDb(retries = 10, delay = 3000) {
     try {
       if (USE_PG) {
         await query(`
-          CREATE TABLE IF NOT EXISTS admins (
+          CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            club_name TEXT DEFAULT '',
+            plan TEXT DEFAULT 'free',
+            public_token TEXT UNIQUE,
+            is_super_admin BOOLEAN DEFAULT false,
+            created_at TIMESTAMPTZ DEFAULT NOW()
           )
         `);
         await query(`
           CREATE TABLE IF NOT EXISTS app_data (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY (user_id, key)
           )
         `);
       } else {
         sqliteDb.exec(`
-          CREATE TABLE IF NOT EXISTS admins (
+          CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            club_name TEXT DEFAULT '',
+            plan TEXT DEFAULT 'free',
+            public_token TEXT UNIQUE,
+            is_super_admin INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
           );
           CREATE TABLE IF NOT EXISTS app_data (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
+            user_id INTEGER NOT NULL,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY (user_id, key),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
           );
         `);
       }
 
-      // Seed default admin
-      const rows = await query('SELECT id FROM admins WHERE username = $1', ['admin']);
-      if (rows.length === 0) {
-        const hash = bcrypt.hashSync('admin', 10);
-        await query('INSERT INTO admins (username, password_hash) VALUES ($1, $2)', ['admin', hash]);
-        console.log('Tài khoản admin mặc định: admin / admin');
-      }
+      // Seed super admin from env
+      await seedSuperAdmin();
 
-      // Import data-backup.json vào SQLite nếu DB trống
+      // Import data-backup.json into SQLite if empty (local dev)
       if (!USE_PG) {
         const fs = require('fs');
         const path = require('path');
         const backupPath = path.join(__dirname, '..', 'data-backup.json');
-        const existing = await query('SELECT value FROM app_data WHERE key = $1', ['state']);
-        if (existing.length === 0 && fs.existsSync(backupPath)) {
-          const backup = fs.readFileSync(backupPath, 'utf8');
-          await query(
-            "INSERT OR REPLACE INTO app_data (key, value) VALUES ($1, $2)",
-            ['state', backup]
-          );
-          console.log('Đã import data-backup.json vào SQLite local');
+        const superAdmin = (await query('SELECT id FROM users WHERE is_super_admin = $1', [USE_PG ? true : 1]))[0];
+        if (superAdmin && fs.existsSync(backupPath)) {
+          const existing = await query('SELECT value FROM app_data WHERE user_id = $1 AND key = $2', [superAdmin.id, 'state']);
+          if (existing.length === 0) {
+            const backup = fs.readFileSync(backupPath, 'utf8');
+            await query('INSERT OR REPLACE INTO app_data (user_id, key, value) VALUES ($1, $2, $3)', [superAdmin.id, 'state', backup]);
+            console.log('Đã import data-backup.json vào local dev user');
+          }
         }
       }
 
@@ -97,6 +104,22 @@ async function initDb(retries = 10, delay = 3000) {
       if (i === retries) throw err;
       await new Promise(r => setTimeout(r, delay));
     }
+  }
+}
+
+async function seedSuperAdmin() {
+  const email = process.env.SUPER_ADMIN_EMAIL || 'admin@pickleball.app';
+  const password = process.env.SUPER_ADMIN_PASSWORD || 'superadmin123';
+
+  const rows = await query('SELECT id FROM users WHERE email = $1', [email]);
+  if (rows.length === 0) {
+    const hash = bcrypt.hashSync(password, 10);
+    const isSuper = USE_PG ? true : 1;
+    await query(
+      'INSERT INTO users (email, password_hash, club_name, plan, is_super_admin) VALUES ($1, $2, $3, $4, $5)',
+      [email, hash, 'Super Admin', 'pro', isSuper]
+    );
+    console.log(`Super admin: ${email} / ${password}`);
   }
 }
 

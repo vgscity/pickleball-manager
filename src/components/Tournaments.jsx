@@ -30,7 +30,11 @@ function getKnockoutRoundName(round, totalRounds) {
   return `Vòng 1/${Math.pow(2, fromEnd)}`
 }
 
-export default function Tournaments({ tournaments, players, matches, onTournamentsChange, onMatchesChange }) {
+const FREE_MAX_ACTIVE = 1
+const FREE_MAX_HISTORY = 3
+
+export default function Tournaments({ tournaments, players, matches, onTournamentsChange, onMatchesChange, plan = 'free' }) {
+  const isPro = plan === 'pro'
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState(null)
   // knockoutSetup: { tournamentId, advancingIds }
@@ -53,6 +57,13 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
 
   const handleCreate = () => {
     if (!form.name.trim()) return
+    if (!isPro) {
+      const activeCount = tournaments.filter(t => t.status === 'active' || t.status === 'setup').length
+      if (activeCount >= FREE_MAX_ACTIVE) {
+        alert(`Gói Free chỉ cho phép ${FREE_MAX_ACTIVE} giải đấu đang hoạt động. Hoàn thành giải hiện tại hoặc nâng cấp Pro.`)
+        return
+      }
+    }
     const t = { id: genId(), ...form, createdAt: new Date().toISOString(), status: 'setup', participants: [] }
     onTournamentsChange([...tournaments, t])
     setForm({ name: '', type: 'singles', format: 'roundrobin', groups: 1, pairingRule: 'random', hasKnockout: false, knockoutSize: 8, hasThirdPlace: false, startDate: '', endDate: '', courts: 2, description: '' })
@@ -301,6 +312,16 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
     H: 'bg-red-50 border-red-200 text-red-800',
   }
 
+  // Apply plan limits for display
+  const visibleTournaments = isPro ? tournaments : (() => {
+    const active = tournaments.filter(t => t.status !== 'finished')
+    const finished = tournaments
+      .filter(t => t.status === 'finished')
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, FREE_MAX_HISTORY)
+    return [...active, ...finished]
+  })()
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -453,6 +474,20 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
         </div>
       )}
 
+      {/* Plan limit: free shows only active + 3 recent finished */}
+      {(() => {
+        if (!isPro) {
+          const finishedCount = tournaments.filter(t => t.status === 'finished').length
+          const hidden = finishedCount - FREE_MAX_HISTORY
+          if (hidden > 0) return (
+            <div className="text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl px-4 py-2.5 text-center">
+              {hidden} giải đấu cũ bị ẩn (gói Free). <span className="text-green-600 font-medium">Nâng cấp Pro</span> để xem toàn bộ lịch sử.
+            </div>
+          )
+        }
+        return null
+      })()}
+
       {tournaments.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <Trophy size={40} className="mx-auto mb-2 opacity-30" />
@@ -460,7 +495,7 @@ export default function Tournaments({ tournaments, players, matches, onTournamen
         </div>
       ) : (
         <div className="space-y-3">
-          {tournaments.map(t => {
+          {visibleTournaments.map(t => {
             const tMatches = matches.filter(m => m.tournamentId === t.id)
             const groupMatches = tMatches.filter(m => m.stage === 'group' || !m.stage)
             const knockoutMatches = tMatches.filter(m => m.stage === 'knockout')

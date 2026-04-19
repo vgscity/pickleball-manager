@@ -52,15 +52,49 @@ function useDebouncedCallback(fn, delay) {
   }
 }
 
-export function useStore() {
+export function useStore(viewToken = null) {
   const [data, setData] = useState(defaultData)
   const [loading, setLoading] = useState(true)
   const initialized = useRef(false)
 
   // Load data from API on mount
   useEffect(() => {
-    fetch('/api/data')
-      .then(r => r.json())
+    const token = sessionStorage.getItem('pb_token')
+
+    // Public viewer mode with ?view=TOKEN
+    if (viewToken) {
+      fetch(`/api/data/public/${viewToken}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(remote => {
+          if (remote) {
+            setData(prev => ({
+              ...defaultData,
+              ...remote,
+              settings: { ...defaultData.settings, ...remote.settings },
+              players: remote.players?.length ? remote.players : defaultData.players,
+            }))
+          }
+          initialized.current = true
+          setLoading(false)
+        })
+        .catch(() => {
+          initialized.current = true
+          setLoading(false)
+        })
+      return
+    }
+
+    // Authenticated user mode
+    if (!token) {
+      initialized.current = true
+      setLoading(false)
+      return
+    }
+
+    fetch('/api/data', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
       .then(remote => {
         if (remote) {
           setData(prev => ({
@@ -77,7 +111,7 @@ export function useStore() {
         initialized.current = true
         setLoading(false)
       })
-  }, [])
+  }, [viewToken])
 
   // Save to API (debounced 1s) whenever data changes after init
   const saveToApi = useDebouncedCallback((newData) => {

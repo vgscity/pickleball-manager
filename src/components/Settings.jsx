@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Settings2, Eye, EyeOff, Check, RefreshCw, ImagePlus, X } from 'lucide-react'
+import { Settings2, Eye, EyeOff, Check, RefreshCw, ImagePlus, X, Crown, Copy, ExternalLink } from 'lucide-react'
 
 const EMOJIS = ['🏓', '🎾', '🏆', '⚡', '🔥', '🌟', '🎯', '💪', '🏅', '🥇']
 
-export default function Settings({ settings, onChange }) {
+export default function Settings({ settings, onChange, plan = 'free' }) {
+  const isPro = plan === 'pro'
   const [form, setForm] = useState({ ...settings })
   const [showPw, setShowPw] = useState(false)
   const [showNewPw, setShowNewPw] = useState(false)
@@ -187,6 +188,9 @@ export default function Settings({ settings, onChange }) {
         </button>
       </div>
 
+      {/* Plan info + Viewer link */}
+      <PlanSection isPro={isPro} />
+
       {/* Change password */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
         <h3 className="font-semibold text-gray-700 text-sm">Đổi mật khẩu Admin</h3>
@@ -227,6 +231,80 @@ export default function Settings({ settings, onChange }) {
           <RefreshCw size={14} /> Đổi mật khẩu
         </button>
       </div>
+    </div>
+  )
+}
+
+function PlanSection({ isPro }) {
+  const [copied, setCopied] = useState(false)
+  const [viewerUrl, setViewerUrl] = useState('')
+
+  useEffect(() => {
+    if (!isPro) return
+    // Fetch viewer token from /api/auth/me
+    const token = sessionStorage.getItem('pb_token')
+    if (!token) return
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.publicToken) {
+          setViewerUrl(`${window.location.origin}/?view=${data.publicToken}`)
+        }
+      })
+      .catch(() => {})
+  }, [isPro])
+
+  const handleCopy = () => {
+    if (!viewerUrl) return
+    navigator.clipboard.writeText(viewerUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (isPro) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Crown size={16} className="text-yellow-600" />
+          <h3 className="font-semibold text-yellow-800 text-sm">Gói Pro đang hoạt động</h3>
+        </div>
+        <ul className="text-xs text-yellow-700 space-y-1">
+          <li>✓ Không giới hạn thành viên</li>
+          <li>✓ Không giới hạn giải đấu</li>
+          <li>✓ Viewer link công khai</li>
+        </ul>
+        {viewerUrl && (
+          <div>
+            <p className="text-xs text-yellow-700 font-medium mb-1.5">Link xem công khai (chia sẻ với thành viên):</p>
+            <div className="flex items-center gap-2 bg-white rounded-lg border border-yellow-200 px-3 py-2">
+              <span className="text-xs text-gray-600 flex-1 truncate">{viewerUrl}</span>
+              <button onClick={handleCopy}
+                className={`shrink-0 flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${copied ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'}`}>
+                <Copy size={12} /> {copied ? 'Đã copy!' : 'Copy'}
+              </button>
+              <a href={viewerUrl} target="_blank" rel="noreferrer"
+                className="shrink-0 p-1 text-gray-400 hover:text-yellow-600 transition-colors">
+                <ExternalLink size={14} />
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-2">
+      <div className="flex items-center gap-2">
+        <Crown size={16} className="text-gray-400" />
+        <h3 className="font-semibold text-gray-600 text-sm">Gói của bạn: Free</h3>
+      </div>
+      <ul className="text-xs text-gray-500 space-y-1">
+        <li>✓ Tối đa 20 thành viên</li>
+        <li>✓ 1 giải đấu active, xem 3 giải gần nhất</li>
+        <li className="text-gray-400">✗ Viewer link công khai</li>
+      </ul>
+      <p className="text-xs text-green-600 font-medium pt-1">Liên hệ admin để nâng cấp Pro → không giới hạn + viewer link</p>
     </div>
   )
 }
