@@ -9,6 +9,7 @@ import Settings from './components/Settings'
 import Login from './components/Login'
 import Register from './components/Register'
 import SuperAdmin from './components/SuperAdmin'
+import SetupSuperAdmin from './components/SetupSuperAdmin'
 import ViewerApp from './components/ViewerApp'
 import { LayoutDashboard, Users, Trophy, Calendar, DollarSign, Settings2, Menu, X, Eye, LogOut, Crown } from 'lucide-react'
 
@@ -34,11 +35,20 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [needsSetup, setNeedsSetup] = useState(null) // null = loading, true/false
 
   // Auth state
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('pb_token'))
   const [plan, setPlan] = useState(() => sessionStorage.getItem('pb_plan') || 'free')
   const [isSuperAdmin, setIsSuperAdmin] = useState(() => sessionStorage.getItem('pb_is_super_admin') === 'true')
+
+  // Check if super admin setup is needed (only once, no token required)
+  useEffect(() => {
+    fetch('/api/superadmin/needs-setup')
+      .then(r => r.json())
+      .then(d => setNeedsSetup(d.needsSetup === true))
+      .catch(() => setNeedsSetup(false))
+  }, [])
 
   // Apply web title dynamically
   useEffect(() => {
@@ -115,6 +125,11 @@ export default function App() {
     return logoUrl
       ? <img src={logoUrl} alt="logo" className={`${cls} object-cover border border-white border-opacity-20`} />
       : <div className={`${cls} bg-green-600 flex items-center justify-center font-black shrink-0`}>{logoEmoji}</div>
+  }
+
+  // First-time setup: no super admin yet
+  if (needsSetup === true) {
+    return <SetupSuperAdmin onDone={() => setNeedsSetup(false)} />
   }
 
   // Public viewer mode (?view=TOKEN)

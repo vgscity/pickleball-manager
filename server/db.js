@@ -78,8 +78,7 @@ async function initDb(retries = 10, delay = 3000) {
         `);
       }
 
-      // Seed super admin from env
-      await seedSuperAdmin();
+      // No auto-seed — super admin is created via one-time setup API
 
       // Import data-backup.json into SQLite if empty (local dev)
       if (!USE_PG) {
@@ -107,20 +106,4 @@ async function initDb(retries = 10, delay = 3000) {
   }
 }
 
-async function seedSuperAdmin() {
-  const email = process.env.SUPER_ADMIN_EMAIL || 'admin@pickleball.app';
-  const password = process.env.SUPER_ADMIN_PASSWORD || 'superadmin123';
-
-  const rows = await query('SELECT id FROM users WHERE email = $1', [email]);
-  if (rows.length === 0) {
-    const hash = bcrypt.hashSync(password, 10);
-    const isSuper = USE_PG ? true : 1;
-    await query(
-      'INSERT INTO users (email, password_hash, club_name, plan, is_super_admin) VALUES ($1, $2, $3, $4, $5)',
-      [email, hash, 'Super Admin', 'pro', isSuper]
-    );
-    console.log(`Super admin: ${email} / ${password}`);
-  }
-}
-
-module.exports = { query, initDb };
+module.exports = { query, initDb, USE_PG };

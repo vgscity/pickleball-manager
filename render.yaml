@@ -20,7 +20,3 @@ services:
         fromDatabase:
           name: pickleball-db
           property: connectionString
-      - key: SUPER_ADMIN_EMAIL
-        sync: false
-      - key: SUPER_ADMIN_PASSWORD
-        sync: false
